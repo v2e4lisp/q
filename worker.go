@@ -1,6 +1,9 @@
 package main
 
-import "encoding/json"
+import (
+        "encoding/json"
+        "log"
+)
 
 // Exmaples:
 //
@@ -35,18 +38,19 @@ func (f HandleFunc) ServeJob(j *Job) error { return f(j) }
 type Worker struct {
         rconn    Conn
         wconn    Conn
-        block    int
         done     chan bool
         handlers map[string]Handler
-        queues   []string
+}
+
+func NewWorker() *Worker {
+        return &Worker{
+                done:     make(chan bool),
+                handlers: make(map[string]Handler),
+        }
 }
 
 var (
-        worker = &Worker{
-                done:     make(chan bool),
-                handlers: make(map[string]Handler),
-                queues:   []string(nil),
-        }
+        worker         = NewWorker()
         Handle         = worker.Handle
         ListenAndServe = worker.ListenAndServe
 )
@@ -65,45 +69,45 @@ func (w *Worker) ListenAndServe(url string) error {
         return nil
 }
 
-func (w *Worker) Handle(queue string, h Handler) {
-        w.handlers[queue] = h
-        w.queues = append(w.queues, "queue:"+queue)
-}
+func (w *Worker) Handle(queue string, h Handler) { w.handlers[queue] = h }
+func (w *Worker) Done()                          { close(w.done) }
 
-func (w *Worker) receive() (jobs chan *Job, exit chan bool) {
+func (w *Worker) accept() (jobs chan *Job) {
         jobs = make(chan *Job)
-        exit = make(chan bool)
-        args := append(w.queues[0:], "0")
-        nargs := make([]interface{}, len(args))
-        for i, arg := range args {
-                nargs[i] = arg
+        args := []interface{}(nil)
+        for queue, _ := range w.handlers {
+                args = append(args, "queue:"+queue)
         }
+        args = append(args, "0")
         go func() {
                 for {
                         select {
                         default:
-                                r, err := w.rconn.BLPOP(nargs...)
+                                r, err := w.rconn.BLPOP(args...)
                                 if err != nil {
-                                        continue
+                                        w.Done()
+                                        break
                                 }
                                 job := &Job{}
                                 re := r.([]interface{})
                                 json.Unmarshal(re[1].([]byte), job)
                                 jobs <- job
                         case <-w.done:
-                                close(exit)
                                 goto exit
                         }
                 }
         exit:
+                log.Println("Stop accepting jobs")
         }()
         return
 }
 
-func (w *Worker) fail(j *Job) {}
+func (w *Worker) fail(job *Job) {
+        log.Println("Fail to serve job:", job)
+}
 
 func (w *Worker) loop() {
-        jobs, exit := w.receive()
+        jobs := w.accept()
         for {
                 select {
                 case j := <-jobs:
@@ -114,10 +118,10 @@ func (w *Worker) loop() {
                         if err := h.ServeJob(j); err != nil {
                                 w.fail(j)
                         }
-                case <-exit:
+                case <-w.done:
                         goto exit
                 }
         }
-        exit:
-        //log.Println("Exit Worker")
+exit:
+        log.Println("Stop serving jobs.")
 }
