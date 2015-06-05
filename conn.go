@@ -13,6 +13,7 @@ const (
 	AUTH   = "AUTH"
 	BLPOP  = "BLPOP"
 	RPUSH  = "RPUSH"
+	SADD   = "SADD"
 )
 
 type Conn struct {
@@ -42,6 +43,7 @@ func (c *Conn) BLPOP(args ...interface{}) (reply interface{}, err error) {
 	return
 }
 
+// not in use
 func (c *Conn) RPUSH(args ...interface{}) error {
 	_, err := c.DO(RPUSH, args...)
 	return err

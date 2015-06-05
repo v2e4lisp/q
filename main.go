@@ -1,9 +1,11 @@
 package main
 
 import (
+        "errors"
         "fmt"
         "log"
         "os"
+        "time"
 )
 
 // var (
@@ -20,7 +22,8 @@ func main() {
                         log.Println("Connection failed:", err)
                         os.Exit(1)
                 }
-                Enqueue(NewJob(os.Args[2], os.Args[3]))
+                err := Enqueue(NewJob(os.Args[2], os.Args[3]))
+                log.Println(err)
         }
 
         // conn, err := NewConn("redis://localhost:6379")
@@ -59,7 +62,10 @@ func main() {
 // }
 
 func info(j *Job) error {
-        fmt.Println(j.Queue, ":", j.Message)
+        if j.Message == "KILLME" {
+                return errors.New("KILLED")
+        }
+        fmt.Println(j.CreatedAt, "-", j.Queue(), ":", j.Message)
         return nil
 }
 
@@ -85,15 +91,3 @@ func work(queues []string) {
 //         return conn.Flush()
 // }
 
-type Job struct {
-        Message string
-        Queue   string
-        Err     string
-}
-
-func NewJob(queue, msg string) *Job {
-        return &Job{
-                Message: msg,
-                Queue:   queue,
-        }
-}

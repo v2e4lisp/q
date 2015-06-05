@@ -13,12 +13,17 @@ type Client struct {
 var client = &Client{}
 
 func (c *Client) Enqueue(job *Job) error {
-        queue := "queue:" + job.Queue
+        queue := job.Queue()
         j, err := json.Marshal(job)
         if err != nil {
                 return err
         }
-        return c.conn.RPUSH(queue, j)
+
+        c.conn.mu.Lock()
+        defer c.conn.mu.Unlock()
+        c.conn.Send(SADD, "queues", queue)
+        c.conn.Send(RPUSH, queue, j)
+        return c.conn.Flush()
 }
 
 func (c *Client) Connect(ru string) error {

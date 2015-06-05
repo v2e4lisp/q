@@ -69,14 +69,14 @@ func (w *Worker) ListenAndServe(url string) error {
         return nil
 }
 
-func (w *Worker) Handle(queue string, h Handler) { w.handlers[queue] = h }
+func (w *Worker) Handle(queue string, h Handler) { w.handlers[JobQueueName(queue)] = h }
 func (w *Worker) Done()                          { close(w.done) }
 
 func (w *Worker) accept() (jobs chan *Job) {
         jobs = make(chan *Job)
         args := []interface{}(nil)
         for queue, _ := range w.handlers {
-                args = append(args, "queue:"+queue)
+                args = append(args, queue)
         }
         args = append(args, "0")
         go func() {
@@ -90,7 +90,9 @@ func (w *Worker) accept() (jobs chan *Job) {
                                 }
                                 job := &Job{}
                                 re := r.([]interface{})
-                                json.Unmarshal(re[1].([]byte), job)
+                                if err := json.Unmarshal(re[1].([]byte), job); err != nil {
+                                        break
+                                }
                                 jobs <- job
                         case <-w.done:
                                 goto exit
@@ -102,8 +104,9 @@ func (w *Worker) accept() (jobs chan *Job) {
         return
 }
 
-func (w *Worker) fail(job *Job) {
-        log.Println("Fail to serve job:", job)
+func (w *Worker) fail(f *Failure) {
+        w.wconn.RPUSH(f.Queue(), f)
+        log.Println("Fail to serve job:", f.Job)
 }
 
 func (w *Worker) loop() {
@@ -111,12 +114,12 @@ func (w *Worker) loop() {
         for {
                 select {
                 case j := <-jobs:
-                        h, ok := w.handlers[j.Queue]
+                        h, ok := w.handlers[j.Queue()]
                         if !ok {
-                                w.fail(j)
+                                break
                         }
                         if err := h.ServeJob(j); err != nil {
-                                w.fail(j)
+                                w.fail(j.Failed(err))
                         }
                 case <-w.done:
                         goto exit
