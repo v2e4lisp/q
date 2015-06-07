@@ -4,13 +4,12 @@ import "encoding/json"
 
 // Examples:
 //
-// q.Connect("redis://localhost:6379")
-// q.Enqueue(NewJob("queue-name", "any message"))
+// client, _ := NewClient("redis://localhost:6379")
+// client.Enqueue(NewJob("queue-name", "any message"))
 type Client struct {
         conn Conn
+        u    string
 }
-
-var client = &Client{}
 
 func (c *Client) Enqueue(job *Job) error {
         queue := job.Queue()
@@ -26,11 +25,8 @@ func (c *Client) Enqueue(job *Job) error {
         return c.conn.Flush()
 }
 
-func (c *Client) Connect(ru string) error {
-        var err error
-        c.conn, err = NewConn(ru)
-        return err
+func NewClient(ru string) (client *Client, err error) {
+        client = &Client{u: ru}
+        client.conn, err = NewConn(ru)
+        return
 }
-
-func Enqueue(job *Job) error  { return client.Enqueue(job) }
-func Connect(ru string) error { return client.Connect(ru) }
