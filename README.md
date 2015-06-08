@@ -2,7 +2,7 @@
 
 ## TODO
 
-* [ ] worker name/id
+* [x] worker name/id
 * [ ] stats
 * [ ] job id?(INCR)
 * [ ] reconnect
