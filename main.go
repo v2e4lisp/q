@@ -5,7 +5,13 @@ import (
         "fmt"
         "log"
         "os"
+        "time"
 )
+
+// redis
+//
+// (list) queue:job
+// (list) queue:job_failed
 
 func main() {
         switch os.Args[1] {
@@ -26,6 +32,19 @@ func info(j *Job) error {
         if j.Message == "KILLME" {
                 return errors.New("KILLED")
         }
+        if j.Topic == "long" {
+                ticker := time.Tick(5 * time.Second)
+                count := 0
+                for {
+                        <-ticker
+                        count++
+                        if count == 6 {
+                                break
+                        }
+                        log.Println("working...")
+                }
+                log.Println("job done")
+        }
         fmt.Println(j.CreatedAt, "-", j.Queue(), ":", j.Message)
         return nil
 }
@@ -33,9 +52,9 @@ func info(j *Job) error {
 func work(queues []string) {
         handler := HandleFunc(info)
         for _, queue := range queues {
-                Handle(queue, handler)
+                worker.Handle(queue, handler)
         }
-        log.Println("Queues: ", queues)
+        log.Println(worker.Name())
         log.Println("Listen: redis://localhost:6379")
         ListenAndServe("redis://localhost:6379")
 }
