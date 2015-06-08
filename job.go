@@ -16,7 +16,7 @@ func NewFailure(job *Job, err error) *Failure {
         }
 }
 
-func (f *Failure) Queue() string { return f.Job.Queue() + ":failed" }
+func (f *Failure) Queue() string { return f.Job.Queue() + "_failed" }
 
 type Job struct {
         Message   string
